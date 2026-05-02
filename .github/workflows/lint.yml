@@ -1,0 +1,20 @@
+name: Lint
+on:
+  push:
+    paths:
+      - '**.lua'
+      - '.github/workflows/lint.yml'
+  pull_request_target:
+    paths:
+      - '**.lua'
+      - '.github/workflows/lint.yml'
+permissions:
+  contents: read
+  checks: write
+jobs:
+  lint:
+    uses: Architected-Gaming/ag-workflows/.github/workflows/lint-reusable.yml@main
+    secrets:
+      LINT_WEBHOOK_SECRET: ${{ secrets.LINT_WEBHOOK_SECRET }}
+      DISCORD_LINT_WEBHOOK: ${{ secrets.DISCORD_LINT_WEBHOOK }}
+      DISCORD_LINT_ERRORS_WEBHOOK: ${{ secrets.DISCORD_LINT_ERRORS_WEBHOOK }}
