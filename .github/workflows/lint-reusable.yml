@@ -260,6 +260,7 @@ jobs:
           # Build and sign payload
           PAYLOAD=$(jq -n \
             --arg repo "${{ github.event.repository.name }}" \
+            --arg org "${{ github.repository_owner }}" \
             --arg branch "${{ github.ref_name }}" \
             --arg status "$STATUS" \
             --argjson error_count "$ERROR_COUNT" \
@@ -268,7 +269,7 @@ jobs:
             --arg commit_sha "${{ github.sha }}" \
             --arg run_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --argjson timestamp "$(date +%s)" \
-            '{repo: $repo, branch: $branch, status: $status, error_count: $error_count, errors: $errors, actor: $actor, commit_sha: $commit_sha, run_url: $run_url, timestamp: $timestamp}')
+            '{repo: $repo, org: $org, branch: $branch, status: $status, error_count: $error_count, errors: $errors, actor: $actor, commit_sha: $commit_sha, run_url: $run_url, timestamp: $timestamp}')
 
           SIGNATURE="sha256=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$TETRA_WEBHOOK_SECRET" | awk '{print $2}')"
           curl -sf -X POST "https://aghub.tech77.net:9443/api/git-ops/lint/webhook" \
