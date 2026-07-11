@@ -83,8 +83,12 @@ jobs:
           python3 << 'PYEOF'
           import json, os, re, urllib.request, xml.etree.ElementTree as ET
 
-          webhook = os.environ.get("WEBHOOK_URL", "")
-          errors_webhook = os.environ.get("ERRORS_WEBHOOK_URL", "")
+          # AG [I] 11JUL26 - UPDATE - secrets may hold MULTIPLE newline-separated webhook URLs
+          # (Tetra admin joins the list with \n); split + loop so every destination is notified.
+          # A single-URL secret is one line -> identical behavior to before.
+          webhooks = [u.strip() for u in os.environ.get("WEBHOOK_URL", "").splitlines() if u.strip()]
+          errors_webhooks = [u.strip() for u in os.environ.get("ERRORS_WEBHOOK_URL", "").splitlines() if u.strip()]
+          # AG UPDATE END
 
           job_status = os.environ["JOB_STATUS"]
           repo = os.environ["REPO"]
@@ -195,11 +199,14 @@ jobs:
               except Exception as e:
                   print(f"::warning::Discord webhook failed: {e}")
 
-          # Main webhook: every run (pass + fail)
-          send(webhook)
-          # Errors webhook: failures only (JUnit count OR job-level failure as fallback)
+          # AG [I] 11JUL26 - UPDATE - loop every configured URL (multi-destination support)
+          # Main webhooks: every run (pass + fail)
+          for wh in webhooks:
+              send(wh)
+          # Errors webhooks: failures only (JUnit count OR job-level failure as fallback)
           if failed > 0 or job_status == "failure":
-              send(errors_webhook)
+              for wh in errors_webhooks:
+                  send(wh)
           # AG UPDATE END
           PYEOF
 
