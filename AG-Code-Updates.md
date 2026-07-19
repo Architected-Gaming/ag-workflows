@@ -2,6 +2,23 @@
 <!-- Created: 2026-04-04 | Format reference — see REFS/AG-Code-Updates.template.md -->
 
 ================================================================================
+AG UPDATE - 18JUL26 - Fix: .lintignore exclusion word-split on spaces (files never removed)
+================================================================================
+
+## 18JUL26: .lintignore Exclusion Broke on Filenames Containing Spaces
+
+**Problem Report:** Tetra Lint Fix Wizard on ASC/plt_drugs excluded 2 non-code files via `.lintignore`, but Code Check kept failing on those exact files, keeping the Git Ops pull blocked. The 2 files: `!requirements/ox_inventory items.lua`, `!requirements/qb-inventory items.lua` — both contain a space.
+
+**Root Cause:** The "Exclude Non-Lintable Files" step iterated `for f in $(find . -not -path './.git/*' -path "./$line" 2>/dev/null)`. The unquoted `$(...)` word-splits `find` output on IFS whitespace, so a path with a space (`./!requirements/ox_inventory items.lua`) split into two bogus tokens (`./!requirements/ox_inventory` + `items.lua`); `rm -f` no-op'd on both, the real file survived, got linted, and failed — defeating the exclusion entirely. `xargs`-based trim compounded the fragility (mangles quotes/backslashes).
+
+**What Changed:**
+- `lint-reusable.yml` (Exclude Non-Lintable Files step) — trim comment/whitespace with bash parameter expansion (no `xargs`), and iterate `find … -print0 | while IFS= read -r -d ''` so paths containing spaces or globs are removed correctly.
+
+**Verified locally:** temp tree with a spaced `.lua` file + `.lintignore` — OLD logic left the file (removed=2 bogus); NEW logic removes exactly the spaced file, leaves real `.lua` intact, exits 0 under `set -eo pipefail`.
+
+**Pairs with:** `Architected-Gaming/tetra-distributed` PR #299 (hub 7.98.17) — makes the Lint Fix Wizard actually re-trigger a lint run after pushing `.lintignore` (a `.lintignore`-only push didn't match the caller `paths:` filter). Both needed for the ASC block to clear.
+
+================================================================================
 AG UPDATE - 04APR26 - Root cause fix: --ignore arg order consuming file path
 ================================================================================
 
