@@ -38,14 +38,22 @@ jobs:
 
           # 2. Honor per-repo .lintignore (one glob pattern per line)
           #    Add non-code .lua files here (install snippets, READMEs, etc.)
+          # AG [I] 18JUL26 - FIX - space-safe exclusion. The old `for f in $(find ...)` word-split on
+          # spaces, so a .lintignore entry like `!requirements/ox_inventory items.lua` was FOUND but
+          # never removed (the path split into two bogus tokens, rm no-op'd) — the file survived and
+          # failed the lint, defeating the whole exclusion and leaving the Git Ops pull blocked. Trim
+          # without xargs (xargs also mangles quotes/backslashes) and iterate find output NUL-delimited
+          # so paths containing spaces or globs delete correctly.
           if [ -f .lintignore ]; then
             while IFS= read -r line || [ -n "$line" ]; do
-              line=$(echo "$line" | sed 's/#.*//' | xargs)
+              line="${line%%#*}"                        # strip trailing comment
+              line="${line#"${line%%[![:space:]]*}"}"   # ltrim
+              line="${line%"${line##*[![:space:]]}"}"   # rtrim
               [ -z "$line" ] && continue
-              for f in $(find . -not -path './.git/*' -path "./$line" 2>/dev/null); do
+              while IFS= read -r -d '' f; do
                 rm -f "$f"
                 ignore=$((ignore + 1))
-              done
+              done < <(find . -not -path './.git/*' -path "./$line" -print0 2>/dev/null)
             done < .lintignore
           fi
 
