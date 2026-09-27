@@ -7,6 +7,9 @@ on:
         required: false
       DISCORD_LINT_ERRORS_WEBHOOK:
         required: false
+      # AG [I] 27SEP26 - UPDATE - no longer used ("Report to Tetra" removed; the hub fetches the
+      # tetra-lint-result artifact). Still declared because every thin caller passes it, and passing
+      # an undeclared secret fails the call. Remove after the hub stops seeding it in lint.yml.
       LINT_WEBHOOK_SECRET:
         required: false
 
@@ -220,8 +223,8 @@ jobs:
 
       # AG [I] 27SEP26 - ADD - the Tetra hub FETCHES this result (tetra-distributed PR #706): on the App's
       # workflow_run it downloads the `tetra-lint-result` artifact, so nothing has to call in to the hub.
-      # Same status/errors as "Report to Tetra" below. No junit.xml (the lint step crashed) writes no file:
-      # the hub then records a failed run as `fail`, instead of the callback's `pass`.
+      # This is the ONLY way results reach the hub ("Report to Tetra" removed 27SEP26). No junit.xml (the
+      # lint step crashed) writes no file: the hub then records a failed run as `fail`.
       - name: Save lint result for Tetra
         if: always()
         run: |
@@ -265,79 +268,3 @@ jobs:
           retention-days: 3
           if-no-files-found: ignore
       # AG ADD END
-
-      # AG [I] 05APR26 - UPDATE - Report lint result to Tetra hub for dashboard badges
-      - name: Report to Tetra
-        if: always()
-        env:
-          TETRA_WEBHOOK_SECRET: ${{ secrets.LINT_WEBHOOK_SECRET }}
-        run: |
-          [ -z "$TETRA_WEBHOOK_SECRET" ] && exit 0
-
-          # Determine status from junit.xml
-          STATUS="pass"
-          ERROR_COUNT=0
-          if [ -f junit.xml ]; then
-            ERROR_COUNT=$(python3 -c "
-          import xml.etree.ElementTree as ET, sys
-          try:
-              tree = ET.parse('junit.xml')
-              count = sum(1 for tc in tree.iter('testcase') if tc.find('failure') is not None or tc.find('error') is not None)
-              print(count)
-          except Exception:
-              print(0)
-          " 2>/dev/null || echo "0")
-            if [ "$ERROR_COUNT" -gt 0 ]; then
-              STATUS="fail"
-            fi
-          fi
-
-          # Build errors array from junit.xml
-          ERRORS="[]"
-          if [ "$STATUS" = "fail" ] && [ -f junit.xml ]; then
-            ERRORS=$(python3 -c "
-          import xml.etree.ElementTree as ET, json, sys
-          try:
-              tree = ET.parse('junit.xml')
-              errs = []
-              for tc in tree.iter('testcase'):
-                  issue = tc.find('failure')
-                  if issue is None:
-                      issue = tc.find('error')
-                  if issue is not None:
-                      name = tc.get('classname', tc.get('name', ''))
-                      msg = (issue.get('message', '') or (issue.text or '')).strip()
-                      parts = name.split(':')
-                      errs.append({
-                          'file': parts[0] if parts else name,
-                          'line': int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0,
-                          'col':  int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0,
-                          'message': msg[:200]
-                      })
-              print(json.dumps(errs))
-          except Exception:
-              print('[]')
-          " 2>/dev/null || echo "[]")
-          fi
-
-          # Build and sign payload
-          PAYLOAD=$(jq -n \
-            --arg repo "${{ github.event.repository.name }}" \
-            --arg org "${{ github.repository_owner }}" \
-            --arg branch "${{ github.ref_name }}" \
-            --arg status "$STATUS" \
-            --argjson error_count "$ERROR_COUNT" \
-            --argjson errors "$ERRORS" \
-            --arg actor "${{ github.actor }}" \
-            --arg commit_sha "${{ github.sha }}" \
-            --arg run_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --argjson timestamp "$(date +%s)" \
-            '{repo: $repo, org: $org, branch: $branch, status: $status, error_count: $error_count, errors: $errors, actor: $actor, commit_sha: $commit_sha, run_url: $run_url, timestamp: $timestamp}')
-
-          SIGNATURE="sha256=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$TETRA_WEBHOOK_SECRET" | awk '{print $2}')"
-          curl -sf -X POST "https://aghub.tech77.net:9443/api/git-ops/lint/webhook" \
-            -H "Content-Type: application/json" \
-            -H "X-Tetra-Signature: $SIGNATURE" \
-            -d "$PAYLOAD" \
-            --max-time 10 || true
-      # AG UPDATE END
