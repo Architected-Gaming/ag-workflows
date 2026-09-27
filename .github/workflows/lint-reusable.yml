@@ -218,6 +218,54 @@ jobs:
           # AG UPDATE END
           PYEOF
 
+      # AG [I] 27SEP26 - ADD - the Tetra hub FETCHES this result (tetra-distributed PR #706): on the App's
+      # workflow_run it downloads the `tetra-lint-result` artifact, so nothing has to call in to the hub.
+      # Same status/errors as "Report to Tetra" below. No junit.xml (the lint step crashed) writes no file:
+      # the hub then records a failed run as `fail`, instead of the callback's `pass`.
+      - name: Save lint result for Tetra
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import json, os, xml.etree.ElementTree as ET
+          if not os.path.exists("junit.xml"):
+              print("No junit.xml, so no Tetra lint result file")
+              raise SystemExit(0)
+          try:
+              tree = ET.parse("junit.xml")
+          except ET.ParseError as e:
+              print(f"junit.xml unreadable ({e}), so no Tetra lint result file")
+              raise SystemExit(0)
+          errs = []
+          for tc in tree.iter("testcase"):
+              issue = tc.find("failure")
+              if issue is None:
+                  issue = tc.find("error")
+              if issue is None:
+                  continue
+              name = tc.get("classname", tc.get("name", ""))
+              msg = (issue.get("message", "") or (issue.text or "")).strip()
+              parts = name.split(":")
+              errs.append({
+                  "file": parts[0] if parts else name,
+                  "line": int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0,
+                  "col": int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0,
+                  "message": msg[:200],
+              })
+          with open("tetra-lint-result.json", "w") as f:
+              json.dump({"status": "fail" if errs else "pass", "error_count": len(errs), "errors": errs[:200]}, f)
+          print(f"Tetra lint result: {'fail' if errs else 'pass'}, {len(errs)} error(s)")
+          PYEOF
+
+      - name: Upload lint result for Tetra
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tetra-lint-result
+          path: tetra-lint-result.json
+          retention-days: 3
+          if-no-files-found: ignore
+      # AG ADD END
+
       # AG [I] 05APR26 - UPDATE - Report lint result to Tetra hub for dashboard badges
       - name: Report to Tetra
         if: always()
