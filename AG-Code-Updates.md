@@ -2,6 +2,24 @@
 <!-- Created: 2026-04-04 | Format reference — see REFS/AG-Code-Updates.template.md -->
 
 ================================================================================
+AG UPDATE - 27SEP26 - Remove "Report to Tetra" (hub fetches the result instead)
+================================================================================
+
+## 27SEP26: Remove "Report to Tetra"
+
+**Why:** Step 4 of the Tetra hub-fetch plan. The saved `tetra-lint-result` artifact (PR #3) was proven on
+Architected-Gaming/jg-advancedgarages run 36357809837: the hub received the workflow_run, and its own fetch
+downloaded and parsed the artifact. The runner callback to `aghub.tech77.net:9443` is the last thing keeping
+the hub's 9443 open to anyone.
+
+**What Changed:**
+- `lint-reusable.yml` — "Report to Tetra" step deleted. The `LINT_WEBHOOK_SECRET` input stays declared (unused):
+  every thin caller passes it, and passing an undeclared secret fails the call.
+
+**Rollback:** revert this commit. The hub's 9443 callback route and its firewall rule stay live until the
+Tetra plan's steps 5-6.
+
+================================================================================
 AG UPDATE - 27SEP26 - Lint result saved as an artifact for the Tetra hub to fetch
 ================================================================================
 
