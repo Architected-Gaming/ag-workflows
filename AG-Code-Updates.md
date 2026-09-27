@@ -2,6 +2,27 @@
 <!-- Created: 2026-04-04 | Format reference — see REFS/AG-Code-Updates.template.md -->
 
 ================================================================================
+AG UPDATE - 27SEP26 - Lint result saved as an artifact for the Tetra hub to fetch
+================================================================================
+
+## 27SEP26: Lint Result Saved as an Artifact for the Tetra Hub
+
+**Why:** "Report to Tetra" POSTs from GitHub Actions runners to `aghub.tech77.net:9443`. Runners have no fixed
+address, so the hub's firewall had to allow 9443 from anywhere. The hub now fetches each finished run's result
+itself (`Architected-Gaming/tetra-distributed` PR #706, hub 7.98.91.2609271557, App subscribed to `workflow_run`).
+
+**What Changed:**
+- `lint-reusable.yml` — new "Save lint result for Tetra" step writes `tetra-lint-result.json` (status,
+  error_count, errors[] with file/line/col/message, the same fields as "Report to Tetra"), and "Upload lint result
+  for Tetra" uploads it as the artifact `tetra-lint-result` (3-day retention). With no junit.xml (the lint step
+  crashed), no file is written, and the hub records a failed run as `fail`.
+- "Report to Tetra" is unchanged and still runs. Both paths run until it is removed in a later change; the hub
+  stores each run once.
+
+**Verified locally:** the new step's script was run on a failing junit.xml (2 errors listed), a passing one (`pass`,
+0), and none (no file, exit 0).
+
+================================================================================
 AG UPDATE - 18JUL26 - Fix: .lintignore exclusion word-split on spaces (files never removed)
 ================================================================================
 
